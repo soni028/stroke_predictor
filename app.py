@@ -10,31 +10,25 @@ st.set_page_config(page_title="Stroke Risk Evaluator", page_icon="🧠", layout=
 if 'app_phase' not in st.session_state:
     st.session_state.app_phase = "welcome"
 
-# 2. LOAD ASSETS SAFELY WITH AUTOMATIC FALLBACKS
+# 2. LOAD ASSETS SAFELY (Logistic Regression & Scaler Only)
 @st.cache_resource
 def load_medical_assets():
     with open('stroke_logistic_model.pkl', 'rb') as f:
         lr = pickle.load(f)
-    with open('stroke_knn_model.pkl', 'rb') as f:
-        knn = pickle.load(f)
     
-    # Scaler is optional but highly recommended for Logistic/KNN numerical features
+    # Scaler is optional but highly recommended if numerical features were normalized
     sc = None
     if os.path.exists('stroke_scaler.pkl'):
         with open('stroke_scaler.pkl', 'rb') as f:
             sc = pickle.load(f)
-    return lr, knn, sc
+    return lr, sc
 
 try:
-    logistic_model, knn_model, stroke_scaler = load_medical_assets()
-    st.sidebar.success("⚡ Diagnostic Models Configured Successfully!")
+    logistic_model, stroke_scaler = load_medical_assets()
+    st.sidebar.success("⚡ Diagnostic Engine Active!")
 except FileNotFoundError:
-    st.error("❌ Diagnostic File Error: Missing model files in repository.")
+    st.error("❌ Diagnostic File Error: 'stroke_logistic_model.pkl' not found. Please ensure it is uploaded to your GitHub repository.")
     st.stop()
-
-# 3. SIDEBAR ENGINE CHOICE
-st.sidebar.header("⚙️ Core Algorithm Core")
-selected_engine = st.sidebar.radio("Select Prediction Engine", ["Logistic Regression", "KNN Classifier"])
 
 
 # ==========================================
@@ -50,7 +44,7 @@ if st.session_state.app_phase == "welcome":
     <div style='background-color: #FDEDEC; padding: 25px; border-radius: 12px; border: 1px solid #F5B7B1; text-align: center;'>
         <span style='font-size: 55px;'>❤️🩺📊</span>
         <h3 style='color: #78281F; margin-top: 12px;'>Begin Non-Invasive Cardiovascular Risk Analysis</h3>
-        <p style='color: #7B7D7D;'>This system cross-references parameters against 1,000 clinical diagnostic records to predict early anomaly detection indicators.</p>
+        <p style='color: #7B7D7D;'>This system cross-references parameters against clinical diagnostic records using Logistic Regression to predict early anomaly detection indicators.</p>
     </div>
     """, unsafe_allow_html=True)
     st.markdown("<br><br>", unsafe_allow_html=True)
@@ -117,35 +111,31 @@ elif st.session_state.app_phase == "questionnaire":
     heart_enc = 1 if heart_disease == "Yes" else 0
 
     # 5. CONSTRUCT EXACT MULTIDIMENSIONAL ELEMENT VECTOR
-    # Order: gender, age, hypertension, heart_disease, ever_married, work_type, Residence_type, avg_glucose_level, bmi, smoking_status
     raw_patient_features = [
         gender_enc, age, hyper_enc, heart_enc, married_enc,
         work_enc, residence_enc, glucose, bmi, smoking_enc
     ]
 
     st.markdown("<br>", unsafe_allow_html=True)
-    active_model_engine = logistic_model if selected_engine == "Logistic Regression" else knn_model
 
     # DIAGNOSTIC CALCULATION SUBMIT BUTTON
     if st.button("🔬 Execute AI Cardiovascular Diagnostics", use_container_width=True):
         try:
-            # Process feature vectors through scaler array shapes if available
             input_array = np.array([raw_patient_features])
             
+            # Process feature vectors through scaler array shapes if available
             if stroke_scaler is not None:
-                # Handle cases based on whether she scaled everything or just numerical sub-features
                 if stroke_scaler.n_features_in_ == 10:
                     input_array = stroke_scaler.transform(input_array)
                 elif stroke_scaler.n_features_in_ == 3:
-                    # Scaled numerical sub-features array extraction strategy
                     scaled_nums = stroke_scaler.transform([[age, glucose, bmi]])[0]
                     input_array = np.array([[
                         gender_enc, scaled_nums[0], hyper_enc, heart_enc, married_enc,
                         work_enc, residence_enc, scaled_nums[1], scaled_nums[2], smoking_enc
                     ]])
 
-            # Run Predictive Classification Check
-            stroke_risk_prediction = active_model_engine.predict(input_array)[0]
+            # Run Predictive Classification Check via Logistic Regression
+            stroke_risk_prediction = logistic_model.predict(input_array)[0]
 
             st.markdown("---")
             # ==========================================
